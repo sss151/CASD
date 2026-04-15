@@ -1,0 +1,601 @@
+#nullable disable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+public class MyTreeMap<K, V> where K : IComparable<K>
+{
+
+    private class Node
+    {
+        public K Key;          
+        public V Value;         
+        public Node Left;     
+        public Node Right;      
+        public Node Parent;    
+
+        public Node(K key, V value, Node parent)
+        {
+            Key = key;
+            Value = value;
+            Parent = parent;
+        }
+    }
+
+    private readonly IComparer<K> _comparer;
+
+    private Node _root;
+
+    private int _size;
+
+    public MyTreeMap() : this(Comparer<K>.Default)
+    {
+
+    }
+
+    public MyTreeMap(IComparer<K> comparer)
+    {
+        _comparer = comparer ?? Comparer<K>.Default;
+        _root = null;
+        _size = 0;
+    }
+
+    public void Clear()
+    {
+        _root = null;  
+        _size = 0;    
+     
+    }
+
+    public bool ContainsKey(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        return FindNode(key) != null;
+    }
+
+    public bool ContainsValue(V value)
+    {
+        return ContainsValueRecursive(_root, value);
+    }
+
+    private bool ContainsValueRecursive(Node node, V value)
+    {
+        if (node == null) return false;
+
+        
+        if (EqualityComparer<V>.Default.Equals(node.Value, value))
+            return true;
+
+    
+        return ContainsValueRecursive(node.Left, value) ||
+               ContainsValueRecursive(node.Right, value);
+    }
+
+    public IEnumerable<KeyValuePair<K, V>> EntrySet()
+    {
+        var result = new List<KeyValuePair<K, V>>();
+        InorderTraversal(_root, result);
+        return result;
+    }
+
+    private void InorderTraversal(Node node, List<KeyValuePair<K, V>> result)
+    {
+        if (node == null) return;
+
+        InorderTraversal(node.Left, result);
+
+        result.Add(new KeyValuePair<K, V>(node.Key, node.Value));
+
+        InorderTraversal(node.Right, result);
+    }
+
+    public V Get(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        var node = FindNode(key);
+        return node != null ? node.Value : default(V);
+    
+    }
+
+    public bool IsEmpty()
+    {
+        return _size == 0;
+    }
+
+    public IEnumerable<K> KeySet()
+    {
+        var result = new List<K>();
+        InorderKeyTraversal(_root, result);
+        return result;
+    }
+
+    private void InorderKeyTraversal(Node node, List<K> result)
+    {
+        if (node == null) return;
+        InorderKeyTraversal(node.Left, result);
+        result.Add(node.Key);
+        InorderKeyTraversal(node.Right, result);
+    }
+
+    public void Put(K key, V value)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        if (_root == null)
+        {
+            _root = new Node(key, value, null);
+            _size = 1;
+            return;
+        }
+
+        Node current = _root;
+        Node parent = null;
+
+        while (current != null)
+        {
+            parent = current;
+            int cmp = _comparer.Compare(key, current.Key);
+
+            if (cmp < 0)
+                current = current.Left;
+            else if (cmp > 0)
+                current = current.Right;
+            else
+            {
+                current.Value = value;
+                return;
+            }
+        }
+
+        int finalCmp = _comparer.Compare(key, parent.Key);
+        if (finalCmp < 0)
+            parent.Left = new Node(key, value, parent);
+        else
+            parent.Right = new Node(key, value, parent);
+
+        _size++;
+    }
+
+    public bool Remove(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        Node node = FindNode(key);
+        if (node == null) return false;
+
+        RemoveNode(node);
+        _size--;
+        return true;
+    }
+
+    private void RemoveNode(Node node)
+    {
+    
+        if (node.Left == null && node.Right == null)
+        {
+            ReplaceNodeInParent(node, null);
+        }
+      
+        else if (node.Left == null)
+        {
+            ReplaceNodeInParent(node, node.Right);
+        }
+        else if (node.Right == null)
+        {
+            ReplaceNodeInParent(node, node.Left);
+        }
+       
+        else
+        {
+        
+            Node successor = FindMin(node.Right);
+
+      
+            node.Key = successor.Key;
+            node.Value = successor.Value;
+
+            
+            RemoveNode(successor);
+        }
+    }
+
+
+    public int Size()
+    {
+        return _size;
+    }
+
+    public K FirstKey()
+    {
+        if (_root == null)
+            throw new InvalidOperationException("Дерево пустое");
+
+        return FindMin(_root).Key;
+    }
+
+    public K LastKey()
+    {
+        if (_root == null)
+            throw new InvalidOperationException("Дерево пустое");
+
+        return FindMax(_root).Key;
+    }
+
+    public MyTreeMap<K, V> HeadMap(K end)
+    {
+        if (end == null)
+            throw new ArgumentNullException(nameof(end));
+
+        var result = new MyTreeMap<K, V>(_comparer);
+        AddHeadMap(_root, end, result);
+        return result;
+    }
+
+    private void AddHeadMap(Node node, K end, MyTreeMap<K, V> result)
+    {
+        if (node == null) return;
+
+        int cmp = _comparer.Compare(node.Key, end);
+
+        if (cmp < 0)
+        {
+       
+            AddHeadMap(node.Left, end, result);
+
+          
+            result.Put(node.Key, node.Value);
+
+          
+            AddHeadMap(node.Right, end, result);
+        }
+        else
+        {
+         
+            AddHeadMap(node.Left, end, result);
+        }
+    }
+
+    public MyTreeMap<K, V> SubMap(K start, K end)
+    {
+        if (start == null)
+            throw new ArgumentNullException(nameof(start));
+        if (end == null)
+            throw new ArgumentNullException(nameof(end));
+
+        var result = new MyTreeMap<K, V>(_comparer);
+        AddSubMap(_root, start, end, result);
+        return result;
+    }
+
+    private void AddSubMap(Node node, K start, K end, MyTreeMap<K, V> result)
+    {
+        if (node == null) return;
+
+        int cmpStart = _comparer.Compare(node.Key, start);
+        int cmpEnd = _comparer.Compare(node.Key, end);
+
+        if (cmpStart >= 0 && cmpEnd < 0)
+        {
+           
+            AddSubMap(node.Left, start, end, result);
+
+           
+            result.Put(node.Key, node.Value);
+
+           
+            AddSubMap(node.Right, start, end, result);
+        }
+        else if (cmpStart < 0)
+        {
+          
+            AddSubMap(node.Right, start, end, result);
+        }
+        else
+        {
+         
+            AddSubMap(node.Left, start, end, result);
+        }
+    }
+
+    public MyTreeMap<K, V> TailMap(K start)
+    {
+        if (start == null)
+            throw new ArgumentNullException(nameof(start));
+
+        var result = new MyTreeMap<K, V>(_comparer);
+        AddTailMap(_root, start, result);
+        return result;
+    }
+
+    private void AddTailMap(Node node, K start, MyTreeMap<K, V> result)
+    {
+        if (node == null) return;
+
+        int cmp = _comparer.Compare(node.Key, start);
+
+        if (cmp > 0)
+        {
+         
+            AddTailMap(node.Left, start, result);
+
+        
+            result.Put(node.Key, node.Value);
+
+       
+            AddTailMap(node.Right, start, result);
+        }
+        else
+        {
+        
+            AddTailMap(node.Right, start, result);
+        }
+    }
+
+    public KeyValuePair<K, V>? LowerEntry(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        Node node = FindLower(key);
+        return node != null ? new KeyValuePair<K, V>(node.Key, node.Value) : (KeyValuePair<K, V>?)null;
+    }
+
+    public KeyValuePair<K, V>? FloorEntry(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        Node node = FindFloor(key);
+        return node != null ? new KeyValuePair<K, V>(node.Key, node.Value) : (KeyValuePair<K, V>?)null;
+    }
+
+    public KeyValuePair<K, V>? HigherEntry(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        Node node = FindHigher(key);
+        return node != null ? new KeyValuePair<K, V>(node.Key, node.Value) : (KeyValuePair<K, V>?)null;
+    }
+
+    public KeyValuePair<K, V>? CeilingEntry(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        Node node = FindCeiling(key);
+        return node != null ? new KeyValuePair<K, V>(node.Key, node.Value) : (KeyValuePair<K, V>?)null;
+    }
+
+    public K LowerKey(K key)
+    {
+        var entry = LowerEntry(key);
+        return entry.HasValue ? entry.Value.Key : default(K);
+    }
+
+    public K FloorKey(K key)
+    {
+        var entry = FloorEntry(key);
+        return entry.HasValue ? entry.Value.Key : default(K);
+    }
+
+    public K HigherKey(K key)
+    {
+        var entry = HigherEntry(key);
+        return entry.HasValue ? entry.Value.Key : default(K);
+    }
+
+    public K CeilingKey(K key)
+    {
+        var entry = CeilingEntry(key);
+        return entry.HasValue ? entry.Value.Key : default(K);
+    }
+
+    public KeyValuePair<K, V>? PollFirstEntry()
+    {
+        if (_root == null) return null;
+
+        var first = FindMin(_root);
+        var entry = new KeyValuePair<K, V>(first.Key, first.Value);
+        RemoveNode(first);
+        _size--;
+        return entry;
+    }
+
+    public KeyValuePair<K, V>? PollLastEntry()
+    {
+        if (_root == null) return null;
+
+        var last = FindMax(_root);
+        var entry = new KeyValuePair<K, V>(last.Key, last.Value);
+        RemoveNode(last);
+        _size--;
+        return entry;
+    }
+
+    public KeyValuePair<K, V>? FirstEntry()
+    {
+        if (_root == null) return null;
+        var first = FindMin(_root);
+        return new KeyValuePair<K, V>(first.Key, first.Value);
+    }
+
+    public KeyValuePair<K, V>? LastEntry()
+    {
+        if (_root == null) return null;
+        var last = FindMax(_root);
+        return new KeyValuePair<K, V>(last.Key, last.Value);
+    }
+
+    private Node FindNode(K key)
+    {
+        Node current = _root;
+        while (current != null)
+        {
+            int cmp = _comparer.Compare(key, current.Key);
+            if (cmp == 0) return current;
+            current = cmp < 0 ? current.Left : current.Right;
+        }
+        return null;
+    }
+
+    private Node FindMin(Node node)
+    {
+        while (node.Left != null)
+            node = node.Left;
+        return node;
+    }
+
+    private Node FindMax(Node node)
+    {
+        while (node.Right != null)
+            node = node.Right;
+        return node;
+    }
+
+    private void ReplaceNodeInParent(Node node, Node newNode)
+    {
+        if (node.Parent == null)
+        {
+            _root = newNode;
+        }
+        else if (node == node.Parent.Left)
+        {
+            node.Parent.Left = newNode;
+        }
+        else
+        {
+            node.Parent.Right = newNode;
+        }
+
+        if (newNode != null)
+            newNode.Parent = node.Parent;
+    }
+
+    private Node FindLower(K key)
+    {
+        Node current = _root;
+        Node candidate = null;
+
+        while (current != null)
+        {
+            if (_comparer.Compare(current.Key, key) < 0)
+            {
+                candidate = current;
+                current = current.Right;
+            }
+            else
+            {
+                current = current.Left;
+            }
+        }
+        return candidate;
+    }
+
+    private Node FindFloor(K key)
+    {
+        Node current = _root;
+        Node candidate = null;
+
+        while (current != null)
+        {
+            int cmp = _comparer.Compare(current.Key, key);
+            if (cmp <= 0)
+            {
+                candidate = current;
+                if (cmp == 0) break;
+                current = current.Right;
+            }
+            else
+            {
+                current = current.Left;
+            }
+        }
+        return candidate;
+    }
+
+    private Node FindHigher(K key)
+    {
+        Node current = _root;
+        Node candidate = null;
+
+        while (current != null)
+        {
+            if (_comparer.Compare(current.Key, key) > 0)
+            {
+                candidate = current;
+                current = current.Left;
+            }
+            else
+            {
+                current = current.Right;
+            }
+        }
+        return candidate;
+    }
+
+    private Node FindCeiling(K key)
+    {
+        Node current = _root;
+        Node candidate = null;
+
+        while (current != null)
+        {
+            int cmp = _comparer.Compare(current.Key, key);
+            if (cmp >= 0)
+            {
+                candidate = current;
+                if (cmp == 0) break;
+                current = current.Left;
+            }
+            else
+            {
+                current = current.Right;
+            }
+        }
+        return candidate;
+    }
+}
+
+class Program
+{
+    static void Main()
+    {
+       
+        var map = new MyTreeMap<int, string>();
+
+        map.Put(5, "Пять");
+        map.Put(3, "Три");
+        map.Put(7, "Семь");
+        map.Put(2, "Два");
+        map.Put(4, "Четыре");
+
+        
+        Console.WriteLine($"Ключ 3: {map.Get(3)}");
+
+        
+        Console.WriteLine($"Содержит ключ 4: {map.ContainsKey(4)}");
+
+        
+        Console.WriteLine("Все ключи:");
+        foreach (var key in map.KeySet())
+            Console.Write(key + " ");
+        Console.WriteLine();
+
+        
+        Console.WriteLine($"Первый ключ: {map.FirstKey()}");
+        Console.WriteLine($"Последний ключ: {map.LastKey()}");
+
+     
+        var subMap = map.SubMap(3, 6);
+        Console.WriteLine("Подотображение от 3 до 6:");
+        foreach (var entry in subMap.EntrySet())
+            Console.WriteLine($"{entry.Key}: {entry.Value}");
+    }
+}

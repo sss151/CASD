@@ -1,0 +1,174 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace task20
+{
+    class Program
+    {
+        static void Main()
+        {
+            Console.WriteLine("=== 1. Транзитивное замыкание (DFS) ===");
+            TransitiveClosure();
+
+            Console.WriteLine("\n=== 10. Максимальный поток (Эдмондс-Карп) ===");
+            MaxFlowDemo();
+
+            Console.WriteLine("\n=== 13. Максимальная клика ===");
+            MaxCliqueDemo();
+        }
+
+        static void TransitiveClosure()
+        {
+            int V = 4;
+            int[,] graph = {
+            {1, 1, 0, 1},
+            {0, 1, 1, 0},
+            {0, 0, 1, 1},
+            {0, 0, 0, 1}
+        };
+
+            int[,] closure = new int[V, V];
+
+            void DFS(int s, int v)
+            {
+                closure[s, v] = 1;
+
+                for (int i = 0; i < V; i++)
+                {
+                    if (graph[v, i] == 1 && closure[s, i] == 0)
+                        DFS(s, i);
+                }
+            }
+
+            for (int i = 0; i < V; i++)
+                DFS(i, i);
+
+            for (int i = 0; i < V; i++)
+            {
+                for (int j = 0; j < V; j++)
+                    Console.Write(closure[i, j] + " ");
+                Console.WriteLine();
+            }
+        }
+
+        static void MaxFlowDemo()
+        {
+            int[,] graph = {
+            {0, 3, 2, 0},
+            {0, 0, 5, 2},
+            {0, 0, 0, 3},
+            {0, 0, 0, 0}
+        };
+
+            int result = EdmondsKarp(graph, 0, 3);
+            Console.WriteLine("Максимальный поток: " + result);
+        }
+
+        static int EdmondsKarp(int[,] capacity, int source, int sink)
+        {
+            int n = capacity.GetLength(0);
+            int[,] residual = (int[,])capacity.Clone();
+            int[] parent = new int[n];
+            int maxFlow = 0;
+
+            while (BFS(residual, source, sink, parent))
+            {
+                int pathFlow = int.MaxValue;
+
+                for (int v = sink; v != source; v = parent[v])
+                {
+                    int u = parent[v];
+                    pathFlow = Math.Min(pathFlow, residual[u, v]);
+                }
+
+                for (int v = sink; v != source; v = parent[v])
+                {
+                    int u = parent[v];
+                    residual[u, v] -= pathFlow;
+                    residual[v, u] += pathFlow;
+                }
+
+                maxFlow += pathFlow;
+            }
+
+            return maxFlow;
+        }
+
+        static bool BFS(int[,] capacity, int source, int sink, int[] parent)
+        {
+            int n = capacity.GetLength(0);
+            bool[] visited = new bool[n];
+            Queue<int> q = new Queue<int>();
+
+            q.Enqueue(source);
+            visited[source] = true;
+            parent[source] = -1;
+
+            while (q.Count > 0)
+            {
+                int u = q.Dequeue();
+
+                for (int v = 0; v < n; v++)
+                {
+                    if (!visited[v] && capacity[u, v] > 0)
+                    {
+                        parent[v] = u;
+                        visited[v] = true;
+
+                        if (v == sink)
+                            return true;
+
+                        q.Enqueue(v);
+                    }
+                }
+            }
+            return false;
+        }
+
+        static void MaxCliqueDemo()
+        {
+            int n = 4;
+            int[,] graph = {
+            {0,1,1,0},
+            {1,0,1,1},
+            {1,1,0,1},
+            {0,1,1,0}
+        };
+
+            bool IsClique(int mask)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    if ((mask & (1 << i)) == 0) continue;
+
+                    for (int j = i + 1; j < n; j++)
+                    {
+                        if ((mask & (1 << j)) != 0 && graph[i, j] == 0)
+                            return false;
+                    }
+                }
+                return true;
+            }
+
+            int maxSize = 0;
+
+            for (int mask = 0; mask < (1 << n); mask++)
+            {
+                if (IsClique(mask))
+                {
+                    int size = 0;
+                    for (int i = 0; i < n; i++)
+                        if ((mask & (1 << i)) != 0)
+                            size++;
+
+                    maxSize = Math.Max(maxSize, size);
+                }
+            }
+
+            Console.WriteLine("Размер максимальной клики: " + maxSize);
+        }
+    }
+}

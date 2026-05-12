@@ -1,0 +1,512 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+
+public class Entry<K, V>
+{
+    public K Key { get; set; }
+    public V Value { get; set; }
+    public Entry<K, V> Next { get; set; }
+
+    public Entry(K key, V value)
+    {
+        Key = key;
+        Value = value;
+        Next = null;
+    }
+}
+
+public class MyHashMap<K, V>
+{
+    private Entry<K, V>[] table;
+    private int size;
+    private float loadFactor;
+    private int capacity;
+
+    public MyHashMap()
+    {
+        capacity = 16;
+        loadFactor = 0.75f;
+        table = new Entry<K, V>[capacity];
+        size = 0;
+    }
+
+    public MyHashMap(int initialCapacity)
+    {
+        if (initialCapacity <= 0)
+            throw new ArgumentException("Начальная ёмкость должна быть положительной");
+
+        capacity = initialCapacity;
+        loadFactor = 0.75f;
+        table = new Entry<K, V>[capacity];
+        size = 0;
+    }
+
+    public MyHashMap(int initialCapacity, float loadFactor)
+    {
+        if (initialCapacity <= 0)
+            throw new ArgumentException("Начальная ёмкость должна быть положительной");
+
+        if (loadFactor <= 0 || loadFactor > 1)
+            throw new ArgumentException("Коэффициент загрузки должен быть между 0 и 1");
+
+        capacity = initialCapacity;
+        this.loadFactor = loadFactor;
+        table = new Entry<K, V>[capacity];
+        size = 0;
+    }
+
+    private int GetBucketIndex(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException("Ключ не может быть null");
+
+        int hashCode = key.GetHashCode();
+
+        return Math.Abs(hashCode % capacity);
+    }
+
+    public void Put(K key, V value)
+    {
+        if (key == null)
+            throw new ArgumentNullException("Ключ не может быть null");
+
+        if ((float)size / capacity >= loadFactor)
+        {
+            Resize();
+        }
+
+        int bucketIndex = GetBucketIndex(key);
+
+        Entry<K, V> current = table[bucketIndex];
+
+        while (current != null)
+        {
+            if (current.Key.Equals(key))
+            {
+                current.Value = value;
+                return;
+            }
+
+            current = current.Next;
+        }
+
+        Entry<K, V> newEntry = new Entry<K, V>(key, value);
+
+        newEntry.Next = table[bucketIndex];
+
+        table[bucketIndex] = newEntry;
+
+        size++;
+    }
+
+    public V Get(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException("Ключ не может быть null");
+
+        int bucketIndex = GetBucketIndex(key);
+
+        Entry<K, V> current = table[bucketIndex];
+
+        while (current != null)
+        {
+            if (current.Key.Equals(key))
+            {
+                return current.Value;
+            }
+
+            current = current.Next;
+        }
+
+        return default(V);
+    }
+
+    public V Remove(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException("Ключ не может быть null");
+
+        int bucketIndex = GetBucketIndex(key);
+
+        Entry<K, V> current = table[bucketIndex];
+
+        Entry<K, V> previous = null;
+
+        while (current != null)
+        {
+            if (current.Key.Equals(key))
+            {
+                if (previous == null)
+                {
+                    table[bucketIndex] = current.Next;
+                }
+                else
+                {
+                    previous.Next = current.Next;
+                }
+
+                size--;
+
+                return current.Value;
+            }
+
+            previous = current;
+            current = current.Next;
+        }
+
+        return default(V);
+    }
+
+    private void Resize()
+    {
+        int newCapacity = capacity * 2;
+
+        Entry<K, V>[] oldTable = table;
+
+        table = new Entry<K, V>[newCapacity];
+
+        capacity = newCapacity;
+
+        size = 0;
+
+        for (int i = 0; i < oldTable.Length; i++)
+        {
+            Entry<K, V> current = oldTable[i];
+
+            while (current != null)
+            {
+                Put(current.Key, current.Value);
+
+                current = current.Next;
+            }
+        }
+    }
+}
+
+public class MyTreeMap<K, V> where K : IComparable<K>
+{
+    private class Node
+    {
+        public K Key;
+        public V Value;
+        public Node Left;
+        public Node Right;
+        public Node Parent;
+
+        public Node(K key, V value, Node parent)
+        {
+            Key = key;
+            Value = value;
+            Parent = parent;
+        }
+    }
+
+    private Node root;
+
+    private int size;
+
+    public void Put(K key, V value)
+    {
+        if (root == null)
+        {
+            root = new Node(key, value, null);
+            size++;
+            return;
+        }
+
+        Node current = root;
+
+        Node parent = null;
+
+        while (current != null)
+        {
+            parent = current;
+
+            int cmp = key.CompareTo(current.Key);
+
+            if (cmp < 0)
+                current = current.Left;
+            else if (cmp > 0)
+                current = current.Right;
+            else
+            {
+                current.Value = value;
+                return;
+            }
+        }
+
+        int finalCmp = key.CompareTo(parent.Key);
+
+        if (finalCmp < 0)
+            parent.Left = new Node(key, value, parent);
+        else
+            parent.Right = new Node(key, value, parent);
+
+        size++;
+    }
+
+    public V Get(K key)
+    {
+        Node node = FindNode(key);
+
+        return node != null ? node.Value : default(V);
+    }
+
+    public bool Remove(K key)
+    {
+        Node node = FindNode(key);
+
+        if (node == null)
+            return false;
+
+        RemoveNode(node);
+
+        size--;
+
+        return true;
+    }
+
+    private Node FindNode(K key)
+    {
+        Node current = root;
+
+        while (current != null)
+        {
+            int cmp = key.CompareTo(current.Key);
+
+            if (cmp == 0)
+                return current;
+
+            current = cmp < 0 ? current.Left : current.Right;
+        }
+
+        return null;
+    }
+
+    private void RemoveNode(Node node)
+    {
+        if (node.Left == null && node.Right == null)
+        {
+            ReplaceNodeInParent(node, null);
+        }
+        else if (node.Left == null)
+        {
+            ReplaceNodeInParent(node, node.Right);
+        }
+        else if (node.Right == null)
+        {
+            ReplaceNodeInParent(node, node.Left);
+        }
+        else
+        {
+            Node successor = FindMin(node.Right);
+
+            node.Key = successor.Key;
+            node.Value = successor.Value;
+
+            RemoveNode(successor);
+        }
+    }
+
+    private Node FindMin(Node node)
+    {
+        while (node.Left != null)
+            node = node.Left;
+
+        return node;
+    }
+
+    private void ReplaceNodeInParent(Node node, Node newNode)
+    {
+        if (node.Parent == null)
+        {
+            root = newNode;
+        }
+        else if (node == node.Parent.Left)
+        {
+            node.Parent.Left = newNode;
+        }
+        else
+        {
+            node.Parent.Right = newNode;
+        }
+
+        if (newNode != null)
+        {
+            newNode.Parent = node.Parent;
+        }
+    }
+}
+
+class Program
+{
+    static Random random = new Random();
+
+    static void Main()
+    {
+        int[] sizes = { 100000, 1000000, 10000000 };
+        Console.WriteLine("Сравнение MyHashMap И MyTreeMap");
+
+        foreach (int size in sizes)
+        {
+            Console.WriteLine($"\n\nРазмер: {size}");
+
+            BenchmarkPut(size);
+
+            BenchmarkGet(size);
+
+            BenchmarkRemove(size);
+        }
+
+        Console.WriteLine("\nТестирование завершено.");
+    }
+
+    static void BenchmarkPut(int size)
+    {
+        double hashTime = 0;
+
+        double treeTime = 0;
+
+        for (int t = 0; t < 20; t++)
+        {
+            MyHashMap<int, int> hashMap = new MyHashMap<int, int>();
+
+            Stopwatch sw = Stopwatch.StartNew();
+
+            for (int i = 0; i < size; i++)
+            {
+                int key = random.Next();
+
+                hashMap.Put(key, i);
+            }
+
+            sw.Stop();
+
+            hashTime += sw.Elapsed.TotalMilliseconds;
+            MyTreeMap<int, int> treeMap = new MyTreeMap<int, int>();
+
+            sw.Restart();
+
+            for (int i = 0; i < size; i++)
+            {
+                int key = random.Next();
+
+                treeMap.Put(key, i);
+            }
+
+            sw.Stop();
+
+            treeTime += sw.Elapsed.TotalMilliseconds;
+        }
+
+        Console.WriteLine("\nPUT:");
+
+        Console.WriteLine($"MyHashMap: {hashTime / 20:F2} ms");
+
+        Console.WriteLine($"MyTreeMap: {treeTime / 20:F2} ms");
+    }
+
+    static void BenchmarkGet(int size)
+    {
+        MyHashMap<int, int> hashMap = new MyHashMap<int, int>();
+
+        MyTreeMap<int, int> treeMap = new MyTreeMap<int, int>();
+
+        int[] keys = new int[size];
+
+        for (int i = 0; i < size; i++)
+        {
+            int key = random.Next();
+
+            keys[i] = key;
+
+            hashMap.Put(key, i);
+
+            treeMap.Put(key, i);
+        }
+
+        double hashTime = 0;
+
+        double treeTime = 0;
+
+        for (int t = 0; t < 20; t++)
+        {
+            int key = keys[random.Next(size)];
+
+            Stopwatch sw = Stopwatch.StartNew();
+
+            hashMap.Get(key);
+
+            sw.Stop();
+
+            hashTime += sw.Elapsed.TotalMilliseconds;
+
+            sw.Restart();
+
+            treeMap.Get(key);
+
+            sw.Stop();
+
+            treeTime += sw.Elapsed.TotalMilliseconds;
+        }
+
+        Console.WriteLine("\nGET:");
+
+        Console.WriteLine($"MyHashMap: {hashTime / 20:F6} ms");
+
+        Console.WriteLine($"MyTreeMap: {treeTime / 20:F6} ms");
+    }
+
+    static void BenchmarkRemove(int size)
+    {
+        double hashTime = 0;
+
+        double treeTime = 0;
+
+        for (int t = 0; t < 20; t++)
+        {
+            MyHashMap<int, int> hashMap = new MyHashMap<int, int>();
+
+            MyTreeMap<int, int> treeMap = new MyTreeMap<int, int>();
+
+            int[] keys = new int[size];
+
+            for (int i = 0; i < size; i++)
+            {
+                int key = random.Next();
+
+                keys[i] = key;
+
+                hashMap.Put(key, i);
+
+                treeMap.Put(key, i);
+            }
+
+            int removeKey = keys[random.Next(size)];
+
+            Stopwatch sw = Stopwatch.StartNew();
+
+            hashMap.Remove(removeKey);
+
+            sw.Stop();
+
+            hashTime += sw.Elapsed.TotalMilliseconds;
+
+
+            sw.Restart();
+
+            treeMap.Remove(removeKey);
+
+            sw.Stop();
+
+            treeTime += sw.Elapsed.TotalMilliseconds;
+        }
+
+        Console.WriteLine("\nREMOVE:");
+
+        Console.WriteLine($"MyHashMap: {hashTime / 20:F6} ms");
+
+        Console.WriteLine($"MyTreeMap: {treeTime / 20:F6} ms");
+    }
+}

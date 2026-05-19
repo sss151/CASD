@@ -1,0 +1,322 @@
+#nullable disable
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+public class MyTreeMap<K, V> where K : IComparable<K>
+{
+    private class Node
+    {
+        public K Key;
+        public V Value;
+        public Node Left;
+        public Node Right;
+        public Node Parent;
+
+        public Node(K key, V value, Node parent)
+        {
+            Key = key;
+            Value = value;
+            Parent = parent;
+        }
+    }
+
+    private readonly IComparer<K> _comparer;
+
+    private Node _root;
+
+    private int _size;
+
+    public MyTreeMap() : this(Comparer<K>.Default)
+    {
+    }
+
+    public MyTreeMap(IComparer<K> comparer)
+    {
+        _comparer = comparer ?? Comparer<K>.Default;
+        _root = null;
+        _size = 0;
+    }
+
+    public void Clear()
+    {
+        _root = null;
+        _size = 0;
+    }
+
+    public bool ContainsKey(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        return FindNode(key) != null;
+    }
+
+    public IEnumerable<K> KeySet()
+    {
+        var result = new List<K>();
+        InorderKeyTraversal(_root, result);
+        return result;
+    }
+
+    private void InorderKeyTraversal(Node node, List<K> result)
+    {
+        if (node == null) return;
+
+        InorderKeyTraversal(node.Left, result);
+
+        result.Add(node.Key);
+
+        InorderKeyTraversal(node.Right, result);
+    }
+
+    public bool IsEmpty()
+    {
+        return _size == 0;
+    }
+
+    public int Size()
+    {
+        return _size;
+    }
+
+    public void Put(K key, V value)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        if (_root == null)
+        {
+            _root = new Node(key, value, null);
+            _size = 1;
+            return;
+        }
+
+        Node current = _root;
+        Node parent = null;
+
+        while (current != null)
+        {
+            parent = current;
+            int cmp = _comparer.Compare(key, current.Key);
+
+            if (cmp < 0)
+                current = current.Left;
+            else if (cmp > 0)
+                current = current.Right;
+            else
+            {
+                current.Value = value;
+                return;
+            }
+        }
+
+        int finalCmp = _comparer.Compare(key, parent.Key);
+
+        if (finalCmp < 0)
+            parent.Left = new Node(key, value, parent);
+        else
+            parent.Right = new Node(key, value, parent);
+
+        _size++;
+    }
+
+    public bool Remove(K key)
+    {
+        if (key == null)
+            throw new ArgumentNullException(nameof(key));
+
+        Node node = FindNode(key);
+
+        if (node == null)
+            return false;
+
+        RemoveNode(node);
+
+        _size--;
+
+        return true;
+    }
+
+    private void RemoveNode(Node node)
+    {
+        if (node.Left == null && node.Right == null)
+        {
+            ReplaceNodeInParent(node, null);
+        }
+        else if (node.Left == null)
+        {
+            ReplaceNodeInParent(node, node.Right);
+        }
+        else if (node.Right == null)
+        {
+            ReplaceNodeInParent(node, node.Left);
+        }
+        else
+        {
+            Node successor = FindMin(node.Right);
+
+            node.Key = successor.Key;
+            node.Value = successor.Value;
+
+            RemoveNode(successor);
+        }
+    }
+
+    private Node FindNode(K key)
+    {
+        Node current = _root;
+
+        while (current != null)
+        {
+            int cmp = _comparer.Compare(key, current.Key);
+
+            if (cmp == 0)
+                return current;
+
+            current = cmp < 0 ? current.Left : current.Right;
+        }
+
+        return null;
+    }
+
+    private Node FindMin(Node node)
+    {
+        while (node.Left != null)
+            node = node.Left;
+
+        return node;
+    }
+
+    private void ReplaceNodeInParent(Node node, Node newNode)
+    {
+        if (node.Parent == null)
+        {
+            _root = newNode;
+        }
+        else if (node == node.Parent.Left)
+        {
+            node.Parent.Left = newNode;
+        }
+        else
+        {
+            node.Parent.Right = newNode;
+        }
+
+        if (newNode != null)
+            newNode.Parent = node.Parent;
+    }
+}
+
+public class MyHashSet<T> where T : IComparable<T>
+{
+    private static readonly object PRESENT = new object();
+
+    private readonly MyTreeMap<T, object> map;
+
+    public MyHashSet()
+    {
+        map = new MyTreeMap<T, object>();
+    }
+
+    public bool Add(T e)
+    {
+        if (map.ContainsKey(e))
+            return false;
+
+        map.Put(e, PRESENT);
+
+        return true;
+    }
+
+    public bool Contains(T o)
+    {
+        return map.ContainsKey(o);
+    }
+
+    public bool Remove(T o)
+    {
+        return map.Remove(o);
+    }
+
+    public void Clear()
+    {
+        map.Clear();
+    }
+
+    public int Size()
+    {
+        return map.Size();
+    }
+
+    public bool IsEmpty()
+    {
+        return map.IsEmpty();
+    }
+
+    public IEnumerable<T> Values()
+    {
+        return map.KeySet();
+    }
+}
+
+public class MyString : IComparable<MyString>
+{
+    public string Text;
+
+    public List<string> Words;
+
+    public MyString(string text)
+    {
+        Text = text;
+
+        Words = text
+            .Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+
+        Words.Sort((a, b) => a.Length.CompareTo(b.Length));
+    }
+
+    public int CompareTo(MyString other)
+    {
+        int min = Math.Min(Words.Count, other.Words.Count);
+
+        for (int i = 0; i < min; i++)
+        {
+            int cmp = Words[i].Length.CompareTo(other.Words[i].Length);
+
+            if (cmp != 0)
+                return cmp;
+        }
+
+        return Words.Count.CompareTo(other.Words.Count);
+    }
+
+    public override string ToString()
+    {
+        return Text;
+    }
+}
+
+class Program
+{
+    static void Main()
+    {
+        MyHashSet<MyString> set = new MyHashSet<MyString>();
+
+        string[] lines = File.ReadAllLines("input.txt");
+
+        foreach (string line in lines)
+        {
+            set.Add(new MyString(line));
+        }
+
+        Console.WriteLine("Строки во множестве:");
+
+        foreach (MyString str in set.Values())
+        {
+            Console.WriteLine(str);
+        }
+    }
+}

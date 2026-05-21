@@ -1,233 +1,196 @@
-#nullable disable
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
-public class MyTreeMap<K, V> where K : IComparable<K>
+public class Entry<K, V>
 {
-    private class Node
-    {
-        public K Key;
-        public V Value;
-        public Node Left;
-        public Node Right;
-        public Node Parent;
+    public K Key { get; set; }
+    public V Value { get; set; }
+    public Entry<K, V> Next { get; set; }
 
-        public Node(K key, V value, Node parent)
-        {
-            Key = key;
-            Value = value;
-            Parent = parent;
-        }
+    public Entry(K key, V value)
+    {
+        Key = key;
+        Value = value;
+        Next = null;
+    }
+}
+
+public class MyHashMap<K, V>
+{
+    private Entry<K, V>[] table;
+    private int size;
+    private float loadFactor;
+    private int capacity;
+
+    public MyHashMap()
+    {
+        capacity = 16;
+        loadFactor = 0.75f;
+        table = new Entry<K, V>[capacity];
+        size = 0;
     }
 
-    private readonly IComparer<K> _comparer;
-
-    private Node _root;
-
-    private int _size;
-
-    public MyTreeMap() : this(Comparer<K>.Default)
-    {
-    }
-
-    public MyTreeMap(IComparer<K> comparer)
-    {
-        _comparer = comparer ?? Comparer<K>.Default;
-        _root = null;
-        _size = 0;
-    }
-
-    public void Clear()
-    {
-        _root = null;
-        _size = 0;
-    }
-
-    public bool ContainsKey(K key)
+    private int GetBucketIndex(K key)
     {
         if (key == null)
-            throw new ArgumentNullException(nameof(key));
+            throw new ArgumentNullException();
 
-        return FindNode(key) != null;
-    }
-
-    public IEnumerable<K> KeySet()
-    {
-        var result = new List<K>();
-        InorderKeyTraversal(_root, result);
-        return result;
-    }
-
-    private void InorderKeyTraversal(Node node, List<K> result)
-    {
-        if (node == null) return;
-
-        InorderKeyTraversal(node.Left, result);
-
-        result.Add(node.Key);
-
-        InorderKeyTraversal(node.Right, result);
-    }
-
-    public bool IsEmpty()
-    {
-        return _size == 0;
-    }
-
-    public int Size()
-    {
-        return _size;
+        int hashCode = key.GetHashCode();
+        return Math.Abs(hashCode % capacity);
     }
 
     public void Put(K key, V value)
     {
-        if (key == null)
-            throw new ArgumentNullException(nameof(key));
-
-        if (_root == null)
+        if ((float)size / capacity >= loadFactor)
         {
-            _root = new Node(key, value, null);
-            _size = 1;
-            return;
+            Resize();
         }
 
-        Node current = _root;
-        Node parent = null;
+        int bucketIndex = GetBucketIndex(key);
+
+        Entry<K, V> current = table[bucketIndex];
 
         while (current != null)
         {
-            parent = current;
-            int cmp = _comparer.Compare(key, current.Key);
-
-            if (cmp < 0)
-                current = current.Left;
-            else if (cmp > 0)
-                current = current.Right;
-            else
+            if (current.Key.Equals(key))
             {
                 current.Value = value;
                 return;
             }
+
+            current = current.Next;
         }
 
-        int finalCmp = _comparer.Compare(key, parent.Key);
+        Entry<K, V> newEntry = new Entry<K, V>(key, value);
 
-        if (finalCmp < 0)
-            parent.Left = new Node(key, value, parent);
-        else
-            parent.Right = new Node(key, value, parent);
+        newEntry.Next = table[bucketIndex];
+        table[bucketIndex] = newEntry;
 
-        _size++;
+        size++;
     }
 
-    public bool Remove(K key)
+    public V Remove(K key)
     {
-        if (key == null)
-            throw new ArgumentNullException(nameof(key));
+        int bucketIndex = GetBucketIndex(key);
 
-        Node node = FindNode(key);
-
-        if (node == null)
-            return false;
-
-        RemoveNode(node);
-
-        _size--;
-
-        return true;
-    }
-
-    private void RemoveNode(Node node)
-    {
-        if (node.Left == null && node.Right == null)
-        {
-            ReplaceNodeInParent(node, null);
-        }
-        else if (node.Left == null)
-        {
-            ReplaceNodeInParent(node, node.Right);
-        }
-        else if (node.Right == null)
-        {
-            ReplaceNodeInParent(node, node.Left);
-        }
-        else
-        {
-            Node successor = FindMin(node.Right);
-
-            node.Key = successor.Key;
-            node.Value = successor.Value;
-
-            RemoveNode(successor);
-        }
-    }
-
-    private Node FindNode(K key)
-    {
-        Node current = _root;
+        Entry<K, V> current = table[bucketIndex];
+        Entry<K, V> previous = null;
 
         while (current != null)
         {
-            int cmp = _comparer.Compare(key, current.Key);
+            if (current.Key.Equals(key))
+            {
+                if (previous == null)
+                {
+                    table[bucketIndex] = current.Next;
+                }
+                else
+                {
+                    previous.Next = current.Next;
+                }
 
-            if (cmp == 0)
-                return current;
+                size--;
+                return current.Value;
+            }
 
-            current = cmp < 0 ? current.Left : current.Right;
+            previous = current;
+            current = current.Next;
         }
 
-        return null;
+        return default(V);
     }
 
-    private Node FindMin(Node node)
+    public bool ContainsKey(K key)
     {
-        while (node.Left != null)
-            node = node.Left;
+        int bucketIndex = GetBucketIndex(key);
 
-        return node;
+        Entry<K, V> current = table[bucketIndex];
+
+        while (current != null)
+        {
+            if (current.Key.Equals(key))
+            {
+                return true;
+            }
+
+            current = current.Next;
+        }
+
+        return false;
     }
 
-    private void ReplaceNodeInParent(Node node, Node newNode)
+    public HashSet<K> KeySet()
     {
-        if (node.Parent == null)
+        HashSet<K> keySet = new HashSet<K>();
+
+        for (int i = 0; i < capacity; i++)
         {
-            _root = newNode;
-        }
-        else if (node == node.Parent.Left)
-        {
-            node.Parent.Left = newNode;
-        }
-        else
-        {
-            node.Parent.Right = newNode;
+            Entry<K, V> current = table[i];
+
+            while (current != null)
+            {
+                keySet.Add(current.Key);
+                current = current.Next;
+            }
         }
 
-        if (newNode != null)
-            newNode.Parent = node.Parent;
+        return keySet;
+    }
+
+    public int Size()
+    {
+        return size;
+    }
+
+    public bool IsEmpty()
+    {
+        return size == 0;
+    }
+
+    public void Clear()
+    {
+        table = new Entry<K, V>[capacity];
+        size = 0;
+    }
+
+    private void Resize()
+    {
+        int newCapacity = capacity * 2;
+
+        Entry<K, V>[] oldTable = table;
+
+        table = new Entry<K, V>[newCapacity];
+        capacity = newCapacity;
+        size = 0;
+
+        for (int i = 0; i < oldTable.Length; i++)
+        {
+            Entry<K, V> current = oldTable[i];
+
+            while (current != null)
+            {
+                Put(current.Key, current.Value);
+                current = current.Next;
+            }
+        }
     }
 }
 
-public class MyHashSet<T> where T : IComparable<T>
+public class MyHashSet<T>
 {
     private static readonly object PRESENT = new object();
 
-    private readonly MyTreeMap<T, object> map;
+    private MyHashMap<T, object> map;
 
     public MyHashSet()
     {
-        map = new MyTreeMap<T, object>();
+        map = new MyHashMap<T, object>();
     }
 
-    public bool Add(T e)
+    public void Add(T e)
     {
-        if (map.ContainsKey(e))
-            return false;
-
         map.Put(e, PRESENT);
-
-        return true;
     }
 
     public bool Contains(T o)
@@ -237,12 +200,7 @@ public class MyHashSet<T> where T : IComparable<T>
 
     public bool Remove(T o)
     {
-        return map.Remove(o);
-    }
-
-    public void Clear()
-    {
-        map.Clear();
+        return map.Remove(o) != null;
     }
 
     public int Size()
@@ -255,42 +213,98 @@ public class MyHashSet<T> where T : IComparable<T>
         return map.IsEmpty();
     }
 
-    public IEnumerable<T> Values()
+    public void Clear()
     {
-        return map.KeySet();
+        map.Clear();
+    }
+
+    public object[] ToArray()
+    {
+        object[] result = new object[Size()];
+        int index = 0;
+
+        foreach (T item in map.KeySet())
+        {
+            result[index++] = item;
+        }
+
+        return result;
     }
 }
 
-public class MyString : IComparable<MyString>
+public class CustomString : IComparable<CustomString>
 {
-    public string Text;
+    public string Text { get; set; }
 
-    public List<string> Words;
-
-    public MyString(string text)
+    public CustomString(string text)
     {
         Text = text;
-
-        Words = text
-            .Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-            .ToList();
-
-        Words.Sort((a, b) => a.Length.CompareTo(b.Length));
     }
 
-    public int CompareTo(MyString other)
+    private List<int> GetSortedWordLengths()
     {
-        int min = Math.Min(Words.Count, other.Words.Count);
+        List<int> lengths = new List<int>();
+
+        string[] words = Text.Split(
+            new char[] { ' ' },
+            StringSplitOptions.RemoveEmptyEntries
+        );
+
+        foreach (string word in words)
+        {
+            lengths.Add(word.Length);
+        }
+
+        lengths.Sort();
+
+        return lengths;
+    }
+
+    public int CompareTo(CustomString other)
+    {
+        List<int> first = GetSortedWordLengths();
+        List<int> second = other.GetSortedWordLengths();
+
+        int min = Math.Min(first.Count, second.Count);
 
         for (int i = 0; i < min; i++)
         {
-            int cmp = Words[i].Length.CompareTo(other.Words[i].Length);
+            if (first[i] < second[i])
+                return -1;
 
-            if (cmp != 0)
-                return cmp;
+            if (first[i] > second[i])
+                return 1;
         }
 
-        return Words.Count.CompareTo(other.Words.Count);
+        if (first.Count < second.Count)
+            return -1;
+
+        if (first.Count > second.Count)
+            return 1;
+
+        return 0;
+    }
+
+    public override bool Equals(object obj)
+    {
+        if (obj == null || !(obj is CustomString))
+            return false;
+
+        return CompareTo((CustomString)obj) == 0;
+    }
+
+    public override int GetHashCode()
+    {
+        List<int> lengths = GetSortedWordLengths();
+
+        int hash = 17;
+
+        foreach (int len in lengths)
+        {
+            hash = hash * 31 + len;
+        }
+
+        return hash;
     }
 
     public override string ToString()
@@ -301,22 +315,43 @@ public class MyString : IComparable<MyString>
 
 class Program
 {
-    static void Main()
+    static void Main(string[] args)
     {
-        MyHashSet<MyString> set = new MyHashSet<MyString>();
+        MyHashSet<CustomString> set =
+            new MyHashSet<CustomString>();
 
-        string[] lines = File.ReadAllLines("input.txt");
-
-        foreach (string line in lines)
+        try
         {
-            set.Add(new MyString(line));
+            string projectDir =
+                Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
+
+            string filePath =
+                Path.Combine(projectDir, "input.txt");
+
+            string[] lines = File.ReadAllLines(filePath);
+
+            foreach (string line in lines)
+            {
+                CustomString custom =
+                    new CustomString(line);
+
+                set.Add(custom);
+            }
+
+            Console.WriteLine("Строки во множестве:\n");
+
+            foreach (object item in set.ToArray())
+            {
+                Console.WriteLine(item);
+            }
         }
-
-        Console.WriteLine("Строки во множестве:");
-
-        foreach (MyString str in set.Values())
+        catch (FileNotFoundException)
         {
-            Console.WriteLine(str);
+            Console.WriteLine("Файл input.txt не найден");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
         }
     }
 }
